@@ -25,13 +25,14 @@ import json
 with open("env.json", "r") as f:
     CENSUS_API = json.load(f)["CENSUS_API"] #<----make sure you this var is set to your key
 
-YEAR = 2021  #[..., 2019, 2020, 2021, check https://www.census.gov/data/developers/data-sets/acs-5year.html]
-GEOGRAPHY = "tract" #["tract", "county", "place", ... see https://pypi.org/project/census/]
+YEAR = 2021           #[..., 2019, 2020, 2021, check https://www.census.gov/data/developers/data-sets/acs-5year.html]
+GEOGRAPHY = "tract"   #["tract", "county", "place", ... see https://pypi.org/project/census/]
 
-TEMP_DIR = "./temp"   # a temporary directory to save dfs created for individual variables
-SCRAPE_VARS = True   # whether to download individual variable data or just perform the concatenation on existing downloads
-CONCAT_VARS = True    # whether to concat the individually downloaded variable dataframes at the end of the scraping procedure
-CONCAT_TYPE = "long"  # "long" (rows at the geography-variable level) or "wide" (rows at the geography level, column for each variable)
+TEMP_DIR = "./temp"    # a temporary directory to save dfs created for individual variables
+SCRAPE_VARS = True     # whether to download individual variable data or just perform the concatenation on existing downloads
+CONCAT_VARS = True     # whether to concat the individually downloaded variable dataframes at the end of the scraping procedure
+CONCAT_TYPE = "long"   # "long" (rows at the geography-variable level) or "wide" (rows at the geography level, column for each variable)
+SKIP_INCOMPLETE = True # in concatenation, skip over variables which do not have data for all of the Geography-level 
 
 
 output_data_name = f"census_features_{YEAR}_{GEOGRAPHY}.feather"
@@ -87,7 +88,7 @@ def get_acs_variable(var_id:str, year:int, descr:str, CensusObj):
     return out
 
 
-def concatenate_variables_long(dir):
+def concatenate_variables_long(dir, skip_incomplete=False):
     """Row bind all variables DFs
     Output:
     | value | unique_id | variable   |
@@ -104,8 +105,11 @@ def concatenate_variables_long(dir):
         variable_name = filename.split("--")[0]
         variables.append(variable_name)
 
-        # Note: if GEOGRAPHY==county unique_id is the fips code
         d = feather.read_feather(Path(dir) / Path(filename))
+        if skip_incomplete and d["value"].isnull().values.any():
+            continue
+
+        # Note: if GEOGRAPHY==county unique_id is the fips code
         d["unique_id"] = d["state"].astype(str) + d[f"{GEOGRAPHY}"].astype(str)
         d.drop(["state", f"{GEOGRAPHY}", "year", "descr"], axis=1, inplace=True)
         d["variable"] = variable_name
@@ -121,7 +125,7 @@ def concatenate_variables_long(dir):
     return total, variables
 
 
-def concatenate_variables_wide(dir):
+def concatenate_variables_wide(dir, skip_incomplete=False):
     """Column bind all variable DFs.
     Output:
     | unique_id   | B01001A_001E | B01001A_002E | ...
@@ -138,6 +142,9 @@ def concatenate_variables_wide(dir):
         variables.append(variable_name)
 
         d = feather.read_feather(Path(dir) / Path(filename))
+        if skip_incomplete and d["value"].isnull().values.any():
+            continue
+
         d.rename(columns={"value" : variable_name}, inplace=True)
         d["unique_id"] = d["state"].astype(str) + d[f"{GEOGRAPHY}"].astype(str)
         d.drop(["state", f"{GEOGRAPHY}", "year", "descr"], axis=1, inplace=True)
@@ -198,7 +205,7 @@ if __name__ == "__main__":
             print("Concatenating variables wide.")
             concat_fn = concatenate_variables_wide
 
-        final, variables = concat_fn(TEMP_DIR)
+        final, variables = concat_fn(TEMP_DIR, SKIP_INCOMPLETE)
 
         feather.write_feather(final, output_data_name)
         with open(output_vars_name, "w") as f:
