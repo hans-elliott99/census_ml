@@ -2,9 +2,9 @@ env*
 .venv
 
 *.feather
-*.csv
 *.txt
 temp/
 
 Note
 test.py
+acs_vars.csv
