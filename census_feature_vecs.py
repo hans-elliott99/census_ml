@@ -23,7 +23,7 @@ import time
 import json
 
 with open("env.json", "r") as f:
-    CENSUS_API = json.load(f)["CENSUS_API"] #<----make sure you this var is set to your key
+    CENSUS_API = json.load(f)["CENSUS_API"] #<----make sure this var is set to your key
 
 YEAR = 2021           #[..., 2019, 2020, 2021, check https://www.census.gov/data/developers/data-sets/acs-5year.html]
 GEOGRAPHY = "tract"   #["tract", "county", "place", ... see https://pypi.org/project/census/]
